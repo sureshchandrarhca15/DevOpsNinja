@@ -1,0 +1,23 @@
+[req]
+distinguished_name = req_distinguished_name
+req_extensions = req_ext
+prompt = no
+
+[req_distinguished_name]
+C   = IN
+ST  = Delhi
+L   = New Delhi
+O   = DevOps Ninja Inc. 
+OU  = devops
+CN  = unseal.devopsninja.lan
+
+[req_ext]
+subjectAltName = @alt_names
+
+[alt_names]
+IP.1 = 127.0.0.1
+DNS.1 = unseal.devopsninja.lan
+DNS.2 = unseal-1.devopsninja.lan
+DNS.3 = unseal-2.devopsninja.lan
+DNS.4 = unseal-3.devopsninja.lan
+DNS.5 = localhost

@@ -1,0 +1,411 @@
+Setup Code Ready Container (CRC) on Ubuntu 22.04.1 LTS
+#######################################################
+
+1. Install the following packages 
+
+student@NUC11TZi7:~$ sudo apt-get update
+
+student@NUC11TZi7:~$ sudo apt-get install --assume-yes qemu-kvm libvirt-daemon libvirt-daemon-system dnsmasq network-manager
+
+
+
+2. Add the current logged in User into following groups 
+
+student@NUC11TZi7:~$ sudo usermod -a -G libvirt $(whoami)
+student@NUC11TZi7:~$ sudo usermod -a -G libvirt-qemu $(whoami)
+student@NUC11TZi7:~$ sudo usermod -a -G libvirt-dnsmasq $(whoami)
+
+student@NUC11TZi7:~$ groups student
+student : student adm cdrom sudo dip plugdev lpadmin lxd sambashare docker libvirt libvirt-qemu libvirt-dnsmasq
+
+
+3. Reboot the system 
+
+student@NUC11TZi7:~$ sudo reboot
+
+
+
+4. Create the below file to add Domain Name
+
+student@NUC11TZi7:~$ sudo mv /etc/systemd/resolved.conf /etc/systemd/resolved.conf.bak
+student@NUC11TZi7:~$ sudo vim /etc/systemd/resolved.conf
+
+[Resolve]
+DNS=127.0.0.2
+Domains=apps-crc.testing crc.testing
+
+:wq (save and exit)
+
+
+
+5. Replace the following in /etc/dnsmasq.conf  file 
+
+student@NUC11TZi7:~$ sudo sed -i 's/#listen-address=/listen-address=127.0.0.2/g' /etc/dnsmasq.conf
+student@NUC11TZi7:~$ grep "listen-address" /etc/dnsmasq.conf
+listen-address=127.0.0.2
+
+
+
+6. Update the following in /etc/default/dnsmasq file 
+
+student@NUC11TZi7:~$ sudo mv /etc/default/dnsmasq /etc/default/dnsmasq.bak
+student@NUC11TZi7:~$ sudo vim /etc/default/dnsmasq
+
+DOMAIN_SUFFIX=``
+ENABLED=1
+CONFIG_DIR=/etc/dnsmasq.d,.dpkg-dist,.dpkg-old,.dpkg-new
+IGNORE_RESOLVCONF=yes
+
+:wq (save and exit)
+
+
+
+7. Update the following in /etc/dnsmasq.d/crc.conf file 
+
+student@NUC11TZi7:~$ sudo vim /etc/dnsmasq.d/crc.conf
+
+address=/crc.testing/192.168.130.11
+address=/apps-crc.testing/192.168.130.11
+server=/#/8.8.8.8
+
+
+:wq (save and exit)
+
+
+
+8. Restart the below system services 
+
+student@NUC11TZi7:~$ sudo systemctl restart systemd-resolved
+student@NUC11TZi7:~$ sudo systemctl enable systemd-resolved
+student@NUC11TZi7:~$ sudo systemctl status systemd-resolved
+
+student@NUC11TZi7:~$ sudo systemctl restart dnsmasq
+student@NUC11TZi7:~$ sudo systemctl enable dnsmasq
+student@NUC11TZi7:~$ sudo systemctl status dnsmasq
+
+
+
+
+9. Validate that you are able to resolve the following FQDN
+
+student@NUC11TZi7:~$ dig api.crc.testing | echo $(grep 192.168.130.11)
+api.crc.testing. 0 IN A 192.168.130.11
+
+student@NUC11TZi7:~$ dig foo.apps-crc.testing | echo $(grep 192.168.130.11)
+foo.apps-crc.testing. 0 IN A 192.168.130.11
+
+
+
+10. Download latest version of CRC and extract it 
+
+student@NUC11TZi7:~$ curl -LO https://mirror.openshift.com/pub/openshift-v4/clients/crc/latest/crc-linux-amd64.tar.xz && tar -Jxvf crc-linux-amd64.tar.xz && mkdir -p ~/bin && export PATH=$PATH:~/bin && mv crc-linux*/crc ~/bin/ && rm -rf crc*
+
+
+11. Configure CRC 
+
+student@NUC11TZi7:~$ crc config set skip-check-network-manager-installed true
+Successfully configured skip-check-network-manager-installed to true
+
+student@NUC11TZi7:~$ crc config set skip-check-systemd-networkd-running true
+Successfully configured skip-check-systemd-networkd-running to true
+
+student@NUC11TZi7:~$ crc config set skip-check-network-manager-running true
+Successfully configured skip-check-network-manager-running to true
+
+student@NUC11TZi7:~$ crc config set memory 32768
+
+student@NUC11TZi7:~$ crc config set cpus 8
+
+student@NUC11TZi7:~$ crc config set disk-size 200
+
+student@NUC11TZi7:~$ crc config view
+- consent-telemetry                     : no
+- cpus                                  : 8
+- memory                                : 32768
+- disk-size                             : 200
+- skip-check-network-manager-installed  : true
+- skip-check-network-manager-running    : true
+- skip-check-systemd-networkd-running   : true
+
+
+12. Setup CRC 
+
+student@NUC11TZi7:~$ crc setup
+CRC is constantly improving and we would like to know more about usage (more details at https://developers.redhat.com/article/tool-data-collection)
+Your preference can be changed manually if desired using 'crc config set consent-telemetry <yes/no>'
+Would you like to contribute anonymous usage statistics? [y/N]: N
+No worry, you can still enable telemetry manually with the command 'crc config set consent-telemetry yes'.
+INFO Using bundle path /home/student/.crc/cache/crc_libvirt_4.12.0_amd64.crcbundle
+INFO Checking if running as non-root
+INFO Checking if running inside WSL2
+INFO Checking if crc-admin-helper executable is cached
+INFO Caching crc-admin-helper executable
+INFO Using root access: Changing ownership of /home/student/.crc/bin/crc-admin-helper-linux
+INFO Using root access: Setting suid for /home/student/.crc/bin/crc-admin-helper-linux
+INFO Checking for obsolete admin-helper executable
+INFO Checking if running on a supported CPU architecture
+INFO Checking minimum RAM requirements
+INFO Checking if crc executable symlink exists
+INFO Creating symlink for crc executable
+INFO Checking if Virtualization is enabled
+INFO Checking if KVM is enabled
+INFO Checking if libvirt is installed
+INFO Checking if user is part of libvirt group
+INFO Checking if active user/process is currently part of the libvirt group
+INFO Checking if libvirt daemon is running
+INFO Checking if a supported libvirt version is installed
+INFO Checking if crc-driver-libvirt is installed
+INFO Installing crc-driver-libvirt
+INFO Checking crc daemon systemd service
+INFO Setting up crc daemon systemd service
+INFO Checking crc daemon systemd socket units
+INFO Setting up crc daemon systemd socket units
+INFO Checking if AppArmor is configured
+INFO Updating AppArmor configuration
+INFO Using root access: Updating AppArmor configuration
+INFO Using root access: Changing permissions for /etc/apparmor.d/libvirt/TEMPLATE.qemu to 644
+INFO Checking if systemd-networkd is running
+WARN Skipping above check...
+INFO Checking if NetworkManager is installed
+WARN Skipping above check...
+INFO Checking if NetworkManager service is running
+WARN Skipping above check...
+INFO Checking if dnsmasq configurations file exist for NetworkManager
+INFO Checking if the systemd-resolved service is running
+INFO Checking if /etc/NetworkManager/dispatcher.d/99-crc.sh exists
+INFO Writing NetworkManager dispatcher file for crc
+INFO Using root access: Writing NetworkManager configuration to /etc/NetworkManager/dispatcher.d/99-crc.sh
+INFO Using root access: Changing permissions for /etc/NetworkManager/dispatcher.d/99-crc.sh to 755
+INFO Using root access: Executing systemctl daemon-reload command
+INFO Using root access: Executing systemctl reload NetworkManager
+INFO Checking if libvirt 'crc' network is available
+INFO Setting up libvirt 'crc' network
+INFO Checking if libvirt 'crc' network is active
+INFO Starting libvirt 'crc' network
+INFO Checking if CRC bundle is extracted in '$HOME/.crc'
+INFO Checking if /home/student/.crc/cache/crc_libvirt_4.12.0_amd64.crcbundle exists
+INFO Getting bundle for the CRC executable
+INFO Downloading bundle: /home/student/.crc/cache/crc_libvirt_4.12.0_amd64.crcbundle...
+2.97 GiB / 2.97 GiB [----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------] 100.00% 16.55 MiB p/s
+INFO Uncompressing /home/student/.crc/cache/crc_libvirt_4.12.0_amd64.crcbundle
+crc.qcow2: 11.55 GiB / 11.55 GiB [-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------] 100.00%
+oc: 124.65 MiB / 124.65 MiB [----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------] 100.00%
+Your system is correctly setup for using CRC. Use 'crc start' to start the instance
+
+
+
+
+13. Start CRC
+
+student@NUC11TZi7:~$ crc start -m 32768 -p ~/.crc-pull-secret
+INFO Checking if running as non-root
+INFO Checking if running inside WSL2
+INFO Checking if crc-admin-helper executable is cached
+INFO Checking for obsolete admin-helper executable
+INFO Checking if running on a supported CPU architecture
+INFO Checking minimum RAM requirements
+INFO Checking if crc executable symlink exists
+INFO Checking if Virtualization is enabled
+INFO Checking if KVM is enabled
+INFO Checking if libvirt is installed
+INFO Checking if user is part of libvirt group
+INFO Checking if active user/process is currently part of the libvirt group
+INFO Checking if libvirt daemon is running
+INFO Checking if a supported libvirt version is installed
+INFO Checking if crc-driver-libvirt is installed
+INFO Checking crc daemon systemd socket units
+INFO Checking if AppArmor is configured
+INFO Checking if systemd-networkd is running
+WARN Skipping above check...
+INFO Checking if NetworkManager is installed
+WARN Skipping above check...
+INFO Checking if NetworkManager service is running
+WARN Skipping above check...
+INFO Checking if dnsmasq configurations file exist for NetworkManager
+INFO Checking if the systemd-resolved service is running
+INFO Checking if /etc/NetworkManager/dispatcher.d/99-crc.sh exists
+INFO Checking if libvirt 'crc' network is available
+INFO Checking if libvirt 'crc' network is active
+INFO Loading bundle: crc_libvirt_4.12.0_amd64...
+INFO Creating CRC VM for openshift 4.12.0...
+INFO Generating new SSH key pair...
+INFO Generating new password for the kubeadmin user
+INFO Starting CRC VM for openshift 4.12.0...
+INFO CRC instance is running with IP 192.168.130.11
+INFO CRC VM is running
+INFO Updating authorized keys...
+INFO Configuring shared directories
+INFO Check internal and public DNS query...
+INFO Check DNS query from host...
+INFO Verifying validity of the kubelet certificates...
+INFO Starting kubelet service
+INFO Waiting for kube-apiserver availability... [takes around 2min]
+INFO Adding user's pull secret to the cluster...
+INFO Updating SSH key to machine config resource...
+INFO Waiting for user's pull secret part of instance disk...
+INFO Changing the password for the kubeadmin user
+INFO Updating cluster ID...
+INFO Updating root CA cert to admin-kubeconfig-client-ca configmap...
+INFO Starting openshift instance... [waiting for the cluster to stabilize]
+INFO 8 operators are progressing: dns, image-registry, ingress, kube-storage-version-migrator, network, ...
+INFO 5 operators are progressing: image-registry, ingress, network, openshift-controller-manager, service-ca
+INFO 6 operators are progressing: authentication, image-registry, ingress, network, openshift-controller-manager, ...
+INFO 5 operators are progressing: authentication, image-registry, network, openshift-controller-manager, service-ca
+INFO 5 operators are progressing: authentication, image-registry, network, openshift-controller-manager, service-ca
+INFO 5 operators are progressing: authentication, image-registry, network, openshift-controller-manager, service-ca
+INFO 5 operators are progressing: authentication, image-registry, network, openshift-controller-manager, service-ca
+INFO 5 operators are progressing: authentication, image-registry, network, openshift-controller-manager, service-ca
+INFO 5 operators are progressing: authentication, image-registry, network, openshift-controller-manager, service-ca
+INFO 4 operators are progressing: authentication, image-registry, openshift-controller-manager, service-ca
+INFO 4 operators are progressing: authentication, image-registry, openshift-controller-manager, service-ca
+INFO 3 operators are progressing: authentication, image-registry, service-ca
+INFO All operators are available. Ensuring stability...
+INFO Operators are stable (2/3)...
+INFO Operators are stable (3/3)...
+INFO Adding crc-admin and crc-developer contexts to kubeconfig...
+Started the OpenShift cluster.
+
+The server is accessible via web console at:
+  https://console-openshift-console.apps-crc.testing
+
+Log in as administrator:
+  Username: kubeadmin
+  Password: AsFuA-kiGLj-o9A7R-jcrkp
+
+Log in as user:
+  Username: developer
+  Password: developer
+
+Use the 'oc' command line interface:
+  $ eval $(crc oc-env)
+  $ oc login -u developer https://api.crc.testing:6443
+
+
+14. Download oc client 
+
+student@NUC11TZi7:~$ export OCP_RELEASE=4.12.0
+
+student@NUC11TZi7:~$ wget https://mirror.openshift.com/pub/openshift-v4/clients/ocp/${OCP_RELEASE}/openshift-client-linux-${OCP_RELEASE}.tar.gz
+
+student@NUC11TZi7:~$ ls -l openshift-client-linux-${OCP_RELEASE}.tar.gz
+-rw-rw-r-- 1 student student 55162032 Jan 13 04:00 openshift-client-linux-4.12.0.tar.gz
+
+student@NUC11TZi7:~$ sudo tar -xzvf openshift-client-linux-4.12.0.tar.gz -C /usr/local/bin/
+README.md
+oc
+kubectl
+
+
+student@NUC11TZi7:~$ sudo rm -rf /usr/local/bin/README.md
+
+
+
+15. Login into OCP Cluster using kubeadmin credentials and check the cluster status 
+
+student@NUC11TZi7:~$ oc login -u kubeadmin -p AsFuA-kiGLj-o9A7R-jcrkp  https://api.crc.testing:6443
+Login successful.
+
+You have access to 66 projects, the list has been suppressed. You can list all projects with 'oc projects'
+
+Using project "default".
+
+
+student@NUC11TZi7:~$ oc get node
+NAME                 STATUS   ROLES                         AGE   VERSION
+crc-chf7b-master-0   Ready    control-plane,master,worker   18d   v1.25.4+77bec7a
+
+
+student@NUC11TZi7:~$ oc get clusteroperator
+NAME                                       VERSION   AVAILABLE   PROGRESSING   DEGRADED   SINCE   MESSAGE
+authentication                             4.12.0    True        False         False      3m52s
+config-operator                            4.12.0    True        False         False      18d
+console                                    4.12.0    True        False         False      5m36s
+control-plane-machine-set                  4.12.0    True        False         False      18d
+dns                                        4.12.0    True        False         False      10m
+etcd                                       4.12.0    True        False         False      18d
+image-registry                             4.12.0    True        False         False      5m3s
+ingress                                    4.12.0    True        False         False      18d
+kube-apiserver                             4.12.0    True        False         False      18d
+kube-controller-manager                    4.12.0    True        False         False      18d
+kube-scheduler                             4.12.0    True        False         False      18d
+kube-storage-version-migrator              4.12.0    True        False         False      10m
+machine-api                                4.12.0    True        False         False      18d
+machine-approver                           4.12.0    True        False         False      18d
+machine-config                             4.12.0    True        False         False      18d
+marketplace                                4.12.0    True        False         False      18d
+network                                    4.12.0    True        False         False      18d
+node-tuning                                4.12.0    True        False         False      5m44s
+openshift-apiserver                        4.12.0    True        False         False      9m58s
+openshift-controller-manager               4.12.0    True        False         False      5m10s
+openshift-samples                          4.12.0    True        False         False      18d
+operator-lifecycle-manager                 4.12.0    True        False         False      18d
+operator-lifecycle-manager-catalog         4.12.0    True        False         False      18d
+operator-lifecycle-manager-packageserver   4.12.0    True        False         False      10m
+service-ca                                 4.12.0    True        False         False      18d
+
+
+student@NUC11TZi7:~$ oc get clusterversion
+NAME      VERSION   AVAILABLE   PROGRESSING   SINCE   STATUS
+version   4.12.0    True        False         18d     Cluster version is 4.12.0
+
+
+
+16. Accessing CodeReady Containers Dashboard on a Remote Server 
+
+student@NUC11TZi7:~$ sudo apt install haproxy
+
+student@NUC11TZi7:~$ sudo mv /etc/haproxy/haproxy.cfg /etc/haproxy/haproxy.cfg.bak
+
+student@NUC11TZi7:~$ sudo vim /etc/haproxy/haproxy.cfg
+
+global
+
+defaults
+	log global
+	mode http
+	timeout connect 0
+	timeout client 0
+	timeout server 0
+
+frontend apps
+	bind 192.168.1.24:80                            ## Replace it with host ip ## 
+	bind 192.168.1.24:443                           ## Replace it with host ip ## 
+	option tcplog
+	mode tcp
+	default_backend apps
+
+backend apps
+	mode tcp
+	balance roundrobin
+	option ssl-hello-chk
+	server webserver1 192.168.130.11:443 check      ## Replace it with $crc ip ## 
+
+frontend api
+	bind 192.168.1.24:6443
+	option tcplog
+	mode tcp
+	default_backend api
+
+backend api
+	mode tcp
+	balance roundrobin
+	option ssl-hello-chk
+	server webserver1 192.168.130.11:6443 check    ## Replace it with $crc ip ## 
+
+:wq (save and exit)
+
+
+student@NUC11TZi7:~$ sudo systemctl restart haproxy
+student@NUC11TZi7:~$ sudo systemctl status haproxy
+
+
+
+remote-vm$ sudo vim /etc/hosts
+...
+192.168.1.24 api.crc.testing canary-openshift-ingress-canary.apps-crc.testing  console-openshift-console.apps-crc.testing default-route-openshift-image-registry.apps-crc.testing  downloads-openshift-console.apps-crc.testing oauth-openshift.apps-crc.testing apps-crc.testing
+...
+
+Open Web Browser and point to the following URL to access Dashboard:
+
+https://console-openshift-console.apps-crc.testing
+
